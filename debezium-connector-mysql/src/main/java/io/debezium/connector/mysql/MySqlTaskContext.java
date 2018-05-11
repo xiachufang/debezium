@@ -232,6 +232,10 @@ public final class MySqlTaskContext extends CdcSourceTaskContext {
         return snapshotMode() == SnapshotMode.SCHEMA_ONLY;
     }
 
+    public boolean isSchemaOnlyWithAllTablesSnapshot() {
+        return snapshotMode() == SnapshotMode.SCHEMA_ONLY_WITH_ALL_TABLES;
+    }
+
     public boolean isSchemaOnlyRecoverySnapshot() {
         return snapshotMode() == SnapshotMode.SCHEMA_ONLY_RECOVERY;
     }

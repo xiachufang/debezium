@@ -321,7 +321,11 @@ public class SnapshotReader extends AbstractReader {
                         mysql.query(sql.get(), rs -> {
                             while (rs.next() && isRunning()) {
                                 TableId id = new TableId(dbName, null, rs.getString(1));
-                                if (filters.tableFilter().test(id)) {
+                                if (context.isSchemaOnlyWithAllTablesSnapshot()) {
+                                    tableIds.add(id);
+                                    tableIdsByDbName.computeIfAbsent(dbName, k -> new ArrayList<>()).add(id);
+                                    logger.info("\t including '{}'", id);
+                                } else if (filters.tableFilter().test(id)) {
                                     tableIds.add(id);
                                     tableIdsByDbName.computeIfAbsent(dbName, k -> new ArrayList<>()).add(id);
                                     logger.info("\t including '{}'", id);

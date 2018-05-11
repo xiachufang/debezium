@@ -36,10 +36,3 @@ script:
   - mvn clean install -Passembly -Dversion.postgres.server=9.6-devel
   - mvn install -pl debezium-connector-postgres -Pwal2json-decoder -Dversion.postgres.server=9.6-devel
 
-notifications:
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/44c51b6da8c2bec32645
-    on_success: always  # options: [always|never|change] default: always
-    on_failure: always  # options: [always|never|change] default: always
-    on_start: never     # options: [always|never|change] default: always
