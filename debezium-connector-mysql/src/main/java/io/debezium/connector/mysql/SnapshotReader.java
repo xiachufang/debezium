@@ -479,6 +479,7 @@ public class SnapshotReader extends AbstractReader {
                     int completedCounter = 0;
                     long largeTableCount = context.rowCountForLargeTable();
                     Iterator<TableId> tableIdIter = tableIds.iterator();
+
                     while (tableIdIter.hasNext()) {
                         TableId tableId = tableIdIter.next();
                         if (!isRunning()) break;
@@ -695,6 +696,16 @@ public class SnapshotReader extends AbstractReader {
                         // This column exists only in MySQL 5.6.5 or later ...
                         String gtidSet = rs.getString(5);// GTID set, may be null, blank, or contain a GTID set
                         source.setCompletedGtidSet(gtidSet);
+
+                        if (gtidSet != null && !gtidSet.trim().isEmpty()) {
+                            String[] splitedGtidSet = gtidSet.trim().split(",");
+                            String currentExecutedGtid = splitedGtidSet[splitedGtidSet.length - 1].trim();
+                            // Just set current gtid
+                            String serverUUID = currentExecutedGtid.split(":")[0];
+                            String currentTransactionId = currentExecutedGtid.split(":")[1].split("-")[1];
+                            String currentGtid = serverUUID + ":" + currentTransactionId;
+                            source.startGtid(currentGtid, null);
+                        }
                         logger.info("\t using binlog '{}' at position '{}' and gtid '{}'", binlogFilename, binlogPosition,
                                     gtidSet);
                     } else {
