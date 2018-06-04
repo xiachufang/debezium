@@ -1,3 +1,9 @@
+/*
+ * Copyright Debezium Authors.
+ *
+ * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
 package io.debezium.connector.mysql;
 
 import io.debezium.config.Configuration;
@@ -11,7 +17,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
-import java.util.*;
+import java.util.Map;
+import java.util.Collections;
+import java.util.List;
+import java.util.HashMap;
+import java.util.ArrayList;
+
 
 public class SelfRestartingMySqlConnector extends SourceConnector {
 
