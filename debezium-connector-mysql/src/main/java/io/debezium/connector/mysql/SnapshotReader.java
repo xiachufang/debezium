@@ -675,6 +675,66 @@ public class SnapshotReader extends AbstractReader {
         }
     }
 
+    protected String getMasterServerUUID(JdbcConnection mysql) throws SQLException {
+        String masterUUID;
+        String showSlaveStmt = "SHOW SLAVE STATUS";
+        Statement stmt = mysql.connection().createStatement();
+        ResultSet rs = stmt.executeQuery(showSlaveStmt);
+
+        if (rs.next()) {
+            // MySQL server is slave. Get Master_UUID.
+            masterUUID = rs.getString("Master_UUID");
+        } else {
+            // MySQL server is master. Get @server_uuid.
+            try {
+                masterUUID = stmt.executeQuery("select @@sever_uuid").getString("@@server_uuid");
+            } catch (SQLException e) {
+                // unknown system variable 'server_uuid'
+                return null;
+            }
+        }
+        return masterUUID;
+    }
+
+    protected String extractCurrentGtid(String masterSeverUUID, String executedGtidSet) {
+        // gtid_set:
+        //    uuid_set [, uuid_set] ...
+        //    | ''
+        //
+        //uuid_set:
+        //    uuid:interval[:interval]...
+        //
+        //uuid:
+        //    hhhhhhhh-hhhh-hhhh-hhhh-hhhhhhhhhhhh
+        //
+        //h:
+        //    [0-9|A-F]
+        //
+        //interval:
+        //    n[-n]
+        //
+        //    (n >= 1)
+        String[] splitedGtidSet = executedGtidSet.trim().split(",");
+        for (String executedGtid: splitedGtidSet) {
+            String trimedExecutedGtid = executedGtid.trim();
+            if (trimedExecutedGtid.isEmpty()) {
+                continue;
+            }
+            String[] seq = trimedExecutedGtid.split(":");
+            if (!seq[0].equals(masterSeverUUID)) {
+                continue;
+            }
+            String interval = seq[seq.length - 1];
+            if (!interval.contains("-")) {
+                return masterSeverUUID + ":" + interval;
+            } else {
+                String currentTransactionId = interval.split("-")[1];
+                return masterSeverUUID + ":" + currentTransactionId;
+            }
+        }
+        return null;
+    }
+
     protected void readBinlogPosition(int step, SourceInfo source, JdbcConnection mysql, AtomicReference<String> sql) throws SQLException {
         if (context.isSchemaOnlyRecoverySnapshot()) {
             // We are in schema only recovery mode, use the existing binlog position
@@ -685,6 +745,7 @@ public class SnapshotReader extends AbstractReader {
             source.startSnapshot();
         } else {
             logger.info("Step {}: read binlog position of MySQL master", step);
+
             String showMasterStmt = "SHOW MASTER STATUS";
             sql.set(showMasterStmt);
             mysql.query(sql.get(), rs -> {
@@ -697,13 +758,22 @@ public class SnapshotReader extends AbstractReader {
                         String gtidSet = rs.getString(5);// GTID set, may be null, blank, or contain a GTID set
                         source.setCompletedGtidSet(gtidSet);
 
-                        if (gtidSet != null && !gtidSet.trim().isEmpty()) {
-                            String[] splitedGtidSet = gtidSet.trim().split(",");
-                            String currentExecutedGtid = splitedGtidSet[splitedGtidSet.length - 1].trim();
-                            // Just set current gtid
-                            String serverUUID = currentExecutedGtid.split(":")[0];
-                            String currentTransactionId = currentExecutedGtid.split(":")[1].split("-")[1];
-                            String currentGtid = serverUUID + ":" + currentTransactionId;
+                        String masterServerUUID = getMasterServerUUID(mysql);
+                        if (masterServerUUID == null) {
+                            logger.warn("master server uuid is null");
+                        }
+
+                        if (masterServerUUID != null && gtidSet != null && !gtidSet.trim().isEmpty()) {
+
+                            String currentGtid = extractCurrentGtid(masterServerUUID, gtidSet);
+                            if (currentGtid == null) {
+                                String errorMsg = "can not find current gtid. masterServerUUID: "
+                                        + masterServerUUID + " "
+                                        + "executedGtidSet: " + gtidSet;
+                                logger.error(errorMsg);
+                                throw new RuntimeException(errorMsg);
+                            }
+                            logger.info("current gtid " + currentGtid);
                             source.startGtid(currentGtid, null);
                         }
                         logger.info("\t using binlog '{}' at position '{}' and gtid '{}'", binlogFilename, binlogPosition,
