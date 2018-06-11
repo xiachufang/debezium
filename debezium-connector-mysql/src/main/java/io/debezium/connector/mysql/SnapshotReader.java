@@ -676,10 +676,23 @@ public class SnapshotReader extends AbstractReader {
     }
 
     protected String getMasterServerUUID(JdbcConnection mysql) throws SQLException {
+        String masterUUID;
         String showSlaveStmt = "SHOW SLAVE STATUS";
         Statement stmt = mysql.connection().createStatement();
         ResultSet rs = stmt.executeQuery(showSlaveStmt);
-        String masterUUID = rs.getString("Master_UUID");
+
+        if (rs.next()) {
+            // MySQL server is slave. Get Master_UUID.
+            masterUUID = rs.getString("Master_UUID");
+        } else {
+            // MySQL server is master. Get @server_uuid.
+            try {
+                masterUUID = stmt.executeQuery("select @@sever_uuid").getString("@@server_uuid");
+            } catch (SQLException e) {
+                // unknown system variable 'server_uuid'
+                return null;
+            }
+        }
         return masterUUID;
     }
 
@@ -737,7 +750,6 @@ public class SnapshotReader extends AbstractReader {
             sql.set(showMasterStmt);
             mysql.query(sql.get(), rs -> {
                 if (rs.next()) {
-                    String masterServerUUID = getMasterServerUUID(mysql);
                     String binlogFilename = rs.getString(1);
                     long binlogPosition = rs.getLong(2);
                     source.setBinlogStartPoint(binlogFilename, binlogPosition);
@@ -746,7 +758,12 @@ public class SnapshotReader extends AbstractReader {
                         String gtidSet = rs.getString(5);// GTID set, may be null, blank, or contain a GTID set
                         source.setCompletedGtidSet(gtidSet);
 
-                        if (gtidSet != null && !gtidSet.trim().isEmpty()) {
+                        String masterServerUUID = getMasterServerUUID(mysql);
+                        if (masterServerUUID == null) {
+                            logger.warn("master server uuid is null");
+                        }
+
+                        if (masterServerUUID != null && gtidSet != null && !gtidSet.trim().isEmpty()) {
 
                             String currentGtid = extractCurrentGtid(masterServerUUID, gtidSet);
                             if (currentGtid == null) {
