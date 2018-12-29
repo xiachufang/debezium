@@ -49,7 +49,7 @@ public final class MySqlSnapshotConnectorTask extends BaseSourceTask {
         try {
             log.info("snapshot start, path: " + this.config.snapshotStatusFile);
             Files.createDirectories(path.getParent());
-            Files.write(path, "started".getBytes());
+            Files.write(path, "start".getBytes());
         } catch (IOException e) {
             throw new ConnectException(e.toString());
         }
@@ -71,7 +71,7 @@ public final class MySqlSnapshotConnectorTask extends BaseSourceTask {
         Path path = Paths.get(this.config.snapshotStatusFile);
         log.info("snapshot finish, path: " + this.config.snapshotStatusFile);
         try {
-            Files.write(path, "completed".getBytes(), StandardOpenOption.WRITE);
+            Files.write(path, "finish".getBytes(), StandardOpenOption.WRITE);
         } catch (IOException e) {
             throw new ConnectException(e.toString());
         }
